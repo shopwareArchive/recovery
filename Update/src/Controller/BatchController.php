@@ -110,7 +110,7 @@ class BatchController
         }
 
         if ($localFilesyste->checksum('src/Kernel.php') !== $remoteFilesyste->checksum('src/Kernel.php')) {
-            throw new \RuntimeException('Filesytems does not seem to match');
+            throw new \RuntimeException('Filesystems does not seem to match');
         }
     }
 
