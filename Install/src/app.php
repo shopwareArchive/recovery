@@ -32,7 +32,7 @@ if (empty($_SESSION)) {
 
     if (!headers_sent()) {
         if (session_status() !== \PHP_SESSION_ACTIVE) {
-            session_set_cookie_params(600, $sessionPath);
+            session_set_cookie_params(1800, $sessionPath);
         }
 
         @session_start();
