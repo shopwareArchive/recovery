@@ -6,7 +6,7 @@ const page = new ProductPageObject();
 const checkoutPage = new CheckoutPageObject();
 const promoCode = 'Flash sale';
 
-describe('Create promotion codes to the product and check it at the storefront', () => {
+describe('Promotions: Discount for a specific range of products', () => {
     beforeEach(() => {
         cy.setToInitialState().then(() => {
             cy.loginViaApi();
@@ -25,7 +25,7 @@ describe('Create promotion codes to the product and check it at the storefront',
         });
     });
 
-    it('@package: should create promotion, configure conditions and discounts', () => {
+    it('@package: should create promotion and apply it for custom products, based on amount', () => {
         cy.intercept({
             url: `**/${Cypress.env('apiPath')}/promotion`,
             method: 'POST'
@@ -33,7 +33,7 @@ describe('Create promotion codes to the product and check it at the storefront',
 
         cy.intercept({
             url: `**/${Cypress.env('apiPath')}/_action/sync`,
-            method: 'post'
+            method: 'POST'
         }).as('saveProduct');
 
         cy.url().should('include', 'promotion/v2/index');
@@ -53,13 +53,14 @@ describe('Create promotion codes to the product and check it at the storefront',
         cy.get('#sw-field--promotion-maxRedemptionsGlobal')
             .should('be.empty')
             .should('have.attr', 'placeholder', 'Onbeperkt');
-        cy.get('select#sw-field--selectedCodeType').contains('Geen promotiecode vereist');
+        cy.get('#sw-field--selectedCodeType').contains('Geen promotiecode vereist');
 
         // Configure Conditions
         cy.get('.sw-tabs-item[title="Voorwaarden"]')
             .should('not.have.class', 'sw-tabs-item--active')
             .click()
             .should('have.class', 'sw-tabs-item--active');
+
         cy.get('.sw-promotion-v2-conditions__sales-channel-selection')
             .typeMultiSelectAndCheck('E2E install test');
         cy.get('.sw-promotion-v2-conditions__rule-select-customer')
@@ -70,11 +71,24 @@ describe('Create promotion codes to the product and check it at the storefront',
         cy.get('.sw-promotion-v2-conditions__rule-select-order-conditions')
             .typeMultiSelectAndCheck('All customers');
 
+        // Set promote set of products
+        cy.get('[name="sw-field--promotion-useSetGroups"]').click();
+        cy.contains('Product set toevoegen').should('exist');
+        cy.contains('Product set toevoegen').click();
+        cy.get('.sw-promotion-v2-cart-condition-form__setgroup-card-title').should('be.visible');
+        cy.get('select#sw-field--group-packagerKey').contains('hoeveelheid');
+        cy.get('input#sw-field--group-value').clearTypeAndCheck('5');
+        cy.get('select#sw-field--group-sorterKey').contains('Prijs, oplopend');
+        cy.get('[label="Product regels"]').typeMultiSelectAndCheck('All customers');
+        cy.get('.sw-promotion-v2-detail__save-action').click();
+        cy.get('.sw-loader').should('not.exist');
+
         // Configure Discounts
         cy.get('.sw-tabs-item[title="Kortingen"]')
             .should('not.have.class', 'sw-tabs-item--active')
             .click()
             .should('have.class', 'sw-tabs-item--active');
+
         cy.get('.sw-promotion-discount-component').should('not.exist');
         cy.contains('Korting toevoegen').should('exist');
         cy.get('.sw-card--hero button').click();
@@ -110,15 +124,19 @@ describe('Create promotion codes to the product and check it at the storefront',
         cy.contains('.search-suggest-product-name', 'Test Product').click();
         cy.get('.product-detail-buy .btn-buy').click();
 
-        // Off canvas verify promotion name and percentage
+        // Off canvas, verify promo code is not available since 1 product added to card
         cy.get(`${checkoutPage.elements.offCanvasCart}.is-open`).should('be.visible');
         cy.get(`${checkoutPage.elements.cartItem}-label`).contains('Test Product');
-        cy.get(`${checkoutPage.elements.cartItem}-promotion`).contains(promoCode);
-        cy.get(`${checkoutPage.elements.cartItem}-promotion ${checkoutPage.elements.cartItem}-price`)
-            .should('include.text', '-6,00');
+        cy.contains(promoCode).should('not.exist');
+        cy.get('.summary-value.summary-total').should('include.text', '60,00');
+
+        // Set the product number to 5 and verify promo code is visible and %10 discount is applied to the card
+        cy.get('.cart-item-quantity-container > .custom-select').select('5');
+        cy.contains(promoCode).should('exist');
+        cy.get('.summary-value.summary-total').should('include.text', '270,00');
     });
 
-    it('@package: should create fixed promotion code and check from the storefront', () => {
+    it('@package: should create promotion and apply it for custom products based on price', () => {
         cy.intercept({
             url: `**/${Cypress.env('apiPath')}/promotion`,
             method: 'POST'
@@ -126,7 +144,7 @@ describe('Create promotion codes to the product and check it at the storefront',
 
         cy.intercept({
             url: `**/${Cypress.env('apiPath')}/_action/sync`,
-            method: 'post'
+            method: 'POST'
         }).as('saveProduct');
 
         cy.url().should('include', 'promotion/v2/index');
@@ -137,11 +155,6 @@ describe('Create promotion codes to the product and check it at the storefront',
         cy.get('#sw-field--promotion-name').typeAndCheck(promoCode);
         cy.get('input[name="sw-field--promotion-active"]').click();
         cy.get('.sw-promotion-v2-detail__save-action').click();
-        cy.wait('@savePromotion').its('response.statusCode').should('equal', 204);
-        cy.get('.sw-loader').should('not.exist');
-        cy.get('#sw-field--selectedCodeType').select('Vaste promotie code');
-        cy.get('input#sw-field--promotion-code').clearTypeAndCheck('EK_1907');
-        cy.get('.sw-promotion-v2-detail__save-action').click();
         cy.get('.sw-loader').should('not.exist');
 
         // Verify promotion on detail page
@@ -150,13 +163,14 @@ describe('Create promotion codes to the product and check it at the storefront',
         cy.get('#sw-field--promotion-maxRedemptionsGlobal')
             .should('be.empty')
             .should('have.attr', 'placeholder', 'Onbeperkt');
-        cy.get('select#sw-field--selectedCodeType').contains('Vaste promotie code');
+        cy.get('#sw-field--selectedCodeType').contains('Geen promotiecode vereist');
 
         // Configure Conditions
         cy.get('.sw-tabs-item[title="Voorwaarden"]')
             .should('not.have.class', 'sw-tabs-item--active')
             .click()
             .should('have.class', 'sw-tabs-item--active');
+
         cy.get('.sw-promotion-v2-conditions__sales-channel-selection')
             .typeMultiSelectAndCheck('E2E install test');
         cy.get('.sw-promotion-v2-conditions__rule-select-customer')
@@ -167,11 +181,24 @@ describe('Create promotion codes to the product and check it at the storefront',
         cy.get('.sw-promotion-v2-conditions__rule-select-order-conditions')
             .typeMultiSelectAndCheck('All customers');
 
+        // Set promote set of products
+        cy.get('[name="sw-field--promotion-useSetGroups"]').click();
+        cy.contains('Product set toevoegen').should('exist');
+        cy.contains('Product set toevoegen').click();
+        cy.get('.sw-promotion-v2-cart-condition-form__setgroup-card-title').should('be.visible');
+        cy.get('select#sw-field--group-packagerKey').select('Bedrag (bruto)');
+        cy.get('input#sw-field--group-value').clearTypeAndCheck('100');
+        cy.get('select#sw-field--group-sorterKey').contains('Prijs, oplopend');
+        cy.get('[label="Product regels"]').typeMultiSelectAndCheck('All customers');
+        cy.get('.sw-promotion-v2-detail__save-action').click();
+        cy.get('.sw-loader').should('not.exist');
+
         // Configure Discounts
         cy.get('.sw-tabs-item[title="Kortingen"]')
             .should('not.have.class', 'sw-tabs-item--active')
             .click()
             .should('have.class', 'sw-tabs-item--active');
+
         cy.get('.sw-promotion-discount-component').should('not.exist');
         cy.contains('Korting toevoegen').should('exist');
         cy.get('.sw-card--hero button').click();
@@ -180,6 +207,7 @@ describe('Create promotion codes to the product and check it at the storefront',
         cy.get('#sw-field--discount-type').select('Procentueel');
         cy.get('.sw-promotion-discount-component__discount-value input').clearTypeAndCheck('10');
         cy.get('.sw-promotion-v2-detail__save-action').click();
+        cy.wait('@savePromotion').its('response.statusCode').should('equal', 204);
         cy.get('.sw-loader').should('not.exist');
 
         // Add product to sales channel
@@ -207,18 +235,19 @@ describe('Create promotion codes to the product and check it at the storefront',
         cy.contains('.search-suggest-product-name', 'Test Product').click();
         cy.get('.product-detail-buy .btn-buy').click();
 
-        // Off canvas verify promotion name and percentage
+        // Verify promo code is NOT available since the product price is 60€, which is under 100€
         cy.get(`${checkoutPage.elements.offCanvasCart}.is-open`).should('be.visible');
         cy.get(`${checkoutPage.elements.cartItem}-label`).contains('Test Product');
-        cy.get('#addPromotionOffcanvasCartInput').clearTypeAndCheck('EK_1907');
-        cy.get('button#addPromotionOffcanvasCart').click();
-        cy.get('.sw-loader').should('not.exist');
-        cy.get(`${checkoutPage.elements.cartItem}-promotion`).contains(promoCode);
-        cy.get(`${checkoutPage.elements.cartItem}-promotion ${checkoutPage.elements.cartItem}-price`)
-            .should('include.text', '-6,00');
+        cy.contains(promoCode).should('not.exist');
+        cy.get('.summary-value.summary-total').should('include.text', '60,00');
+
+        // Set the product number to 2 and verify promo code is visible, and %10 discount is applied to the card
+        cy.get('.cart-item-quantity-container > .custom-select').select('2');
+        cy.contains(promoCode).should('exist');
+        cy.get('.summary-value.summary-total').should('include.text', '108,00');
     });
 
-    it('@package: should create individual promotion codes and check from the storefront', () => {
+    it('@package: should create promotion and apply to a specific range of products only', () => {
         cy.intercept({
             url: `**/${Cypress.env('apiPath')}/promotion`,
             method: 'POST'
@@ -226,11 +255,13 @@ describe('Create promotion codes to the product and check it at the storefront',
 
         cy.intercept({
             url: `**/${Cypress.env('apiPath')}/_action/sync`,
-            method: 'post'
+            method: 'POST'
         }).as('saveProduct');
 
-        const gridCell = '.sw-data-grid__cell';
-        const dataRowZero = '.sw-data-grid__row.sw-data-grid__row--0';
+        cy.intercept({
+            url: `/account/register`,
+            method: 'POST'
+        }).as('registerCustomer');
 
         cy.url().should('include', 'promotion/v2/index');
         cy.get('.sw-promotion-v2-list__smart-bar-button-add').click();
@@ -240,15 +271,6 @@ describe('Create promotion codes to the product and check it at the storefront',
         cy.get('#sw-field--promotion-name').typeAndCheck(promoCode);
         cy.get('input[name="sw-field--promotion-active"]').click();
         cy.get('.sw-promotion-v2-detail__save-action').click();
-        cy.wait('@savePromotion').its('response.statusCode').should('equal', 204);
-        cy.get('.sw-loader').should('not.exist');
-
-        cy.get('#sw-field--selectedCodeType').select('Individuele promotie codes');
-        cy.contains('Codes genereren').click();
-        cy.get('#modalTitleEl').should('be.visible');
-        cy.get('input#sw-field--pattern-prefix').clearTypeAndCheck('EK_');
-        cy.get('input#sw-field--preview').should('have.attr', 'label', 'Voorbeeld promotieco');
-        cy.get('.sw-promotion-v2-generate-codes-modal__button-generate').click();
         cy.get('.sw-loader').should('not.exist');
 
         // Verify promotion on detail page
@@ -257,80 +279,99 @@ describe('Create promotion codes to the product and check it at the storefront',
         cy.get('#sw-field--promotion-maxRedemptionsGlobal')
             .should('be.empty')
             .should('have.attr', 'placeholder', 'Onbeperkt');
-        cy.get('select#sw-field--selectedCodeType').contains('Individuele promotie codes');
+        cy.get('#sw-field--selectedCodeType').contains('Geen promotiecode vereist');
 
         // Configure Conditions
         cy.get('.sw-tabs-item[title="Voorwaarden"]')
             .should('not.have.class', 'sw-tabs-item--active')
             .click()
             .should('have.class', 'sw-tabs-item--active');
+
         cy.get('.sw-promotion-v2-conditions__sales-channel-selection')
             .typeMultiSelectAndCheck('E2E install test');
         cy.get('.sw-promotion-v2-conditions__rule-select-customer')
-            .typeMultiSelectAndCheck('All customers');
+            .typeMultiSelectAndCheck('Customers from USA');
         cy.get('.sw-promotion-v2-conditions__rule-select-customer').type('{esc}');
         cy.get('.sw-promotion-v2-cart-condition-form__rule-select-cart')
             .typeMultiSelectAndCheck('Always valid (Default)');
         cy.get('.sw-promotion-v2-conditions__rule-select-order-conditions')
-            .typeMultiSelectAndCheck('All customers');
+            .typeMultiSelectAndCheck('Customers from USA');
 
         // Configure Discounts
         cy.get('.sw-tabs-item[title="Kortingen"]')
             .should('not.have.class', 'sw-tabs-item--active')
             .click()
             .should('have.class', 'sw-tabs-item--active');
+
         cy.get('.sw-promotion-discount-component').should('not.exist');
         cy.contains('Korting toevoegen').should('exist');
         cy.get('.sw-card--hero button').click();
         cy.get('.sw-promotion-discount-component').should('be.visible');
         cy.get('#sw-field--discount-scope').select('Winkelmandje');
-        cy.get('#sw-field--discount-type').select('Procentueel');
-        cy.get('.sw-promotion-discount-component__discount-value input').clearTypeAndCheck('10');
+
+        // Set the "apply to a specific range of products only" active
+        cy.contains('Alleen op geselecteerde producten toepassen').click();
+        cy.get('.sw-entity-many-to-many-select').typeMultiSelectAndCheck('Customers from USA');
+        cy.get('select#sw-field--discount-applierKey').select('1. item');
+        cy.get('#sw-field--discount-type').select('Absoluut');
+        cy.get('.sw-promotion-discount-component__discount-value input').clearTypeAndCheck('20');
         cy.get('.sw-promotion-v2-detail__save-action').click();
+        cy.wait('@savePromotion').its('response.statusCode').should('equal', 204);
         cy.get('.sw-loader').should('not.exist');
 
-        cy.get('.sw-tabs-item[title="Generaal"]')
-            .should('not.have.class', 'sw-tabs-item--active')
-            .click()
-            .should('have.class', 'sw-tabs-item--active');
+        // Add product to sales channel
+        cy.visit(`${Cypress.env('admin')}#/sw/product/index`);
+        cy.url().should('include', 'product/index');
+        cy.clickContextMenuItem(
+            '.sw-entity-listing__context-menu-edit-action',
+            page.elements.contextMenuButton,
+            `${page.elements.dataGridRow}--0`
+        );
+        cy.contains('h2', 'Test Product').should('be.visible');
+        cy.get('.sw-product-detail__select-visibility').scrollIntoView()
+            .typeMultiSelectAndCheck('E2E install test');
+        cy.get('.sw-button-process__content').click();
+        cy.wait('@saveProduct').its('response.statusCode').should('equal', 200);
+        cy.get('.sw-loader').should('not.exist');
+        cy.get('.sw-button-process__content').contains('Opslaan').should('be.visible');
 
-        cy.get(`${dataRowZero} ${gridCell}-content ${gridCell}-value`).then(($span) => {
-            const individualPromoCode = $span.text().trim();
+        cy.visit(`${Cypress.env('admin')}#/sw/dashboard/index`);
+        cy.url().should('include', 'dashboard/index');
+        cy.goToSalesChannelDetail('E2E install test')
+            .selectCountryForSalesChannel('USA');
 
-            // Add product to sales channel
-            cy.visit(`${Cypress.env('admin')}#/sw/product/index`);
-            cy.url().should('include', 'product/index');
-            cy.clickContextMenuItem(
-                '.sw-entity-listing__context-menu-edit-action',
-                page.elements.contextMenuButton,
-                `${page.elements.dataGridRow}--0`
-            );
-            cy.contains('h2', 'Test Product').should('be.visible');
-            cy.get('.sw-product-detail__select-visibility').scrollIntoView()
-                .typeMultiSelectAndCheck('E2E install test');
-            cy.get('.sw-button-process__content').click();
-            cy.wait('@saveProduct').its('response.statusCode').should('equal', 200);
-            cy.get('.sw-loader').should('not.exist');
-            cy.get('.sw-button-process__content').contains('Opslaan').should('be.visible');
+        // Login from the storefront as a customer from USA
+        cy.visit('/account/login');
+        cy.url().should('include', '/account/login');
+        cy.get('#personalSalutation').select('Mrs.');
+        cy.get('#personalFirstName').typeAndCheckStorefront('Lisa');
+        cy.get('#personalLastName').typeAndCheckStorefront('Hoffmann');
+        cy.get('#personalMail').typeAndCheckStorefront('lisa@hoffmann.com');
+        cy.get('#personalPassword').typeAndCheckStorefront('shopware');
+        cy.get('#billingAddressAddressStreet').typeAndCheckStorefront('Alabama street');
+        cy.get('#billingAddressAddressZipcode').typeAndCheckStorefront('12345');
+        cy.get('#billingAddressAddressCity').typeAndCheckStorefront('New Jersey');
+        cy.get('#billingAddressAddressCountry').select('USA');
+        cy.get('.btn.btn-lg.btn-primary').click();
+        cy.wait('@registerCustomer').its('response.statusCode').should('equal', 302);
 
-            // check from the store front
-            cy.visit('/');
-            cy.contains('Home');
-            cy.get('.header-search-input')
-                .should('be.visible')
-                .type('Test Product');
-            cy.contains('.search-suggest-product-name', 'Test Product').click();
-            cy.get('.product-detail-buy .btn-buy').click();
+        // Check from the store front
+        cy.contains('Home');
+        cy.get('.header-search-input')
+            .should('be.visible')
+            .type('Test Product');
+        cy.contains('.search-suggest-product-name', 'Test Product').click();
+        cy.get('.product-detail-buy .btn-buy').click();
 
-            // Off canvas verify promotion name and percentage
-            cy.get(`${checkoutPage.elements.offCanvasCart}.is-open`).should('be.visible');
-            cy.get(`${checkoutPage.elements.cartItem}-label`).contains('Test Product');
-            cy.get('#addPromotionOffcanvasCartInput').clearTypeAndCheck(individualPromoCode);
-            cy.get('button#addPromotionOffcanvasCart').click();
-            cy.get('.sw-loader').should('not.exist');
-            cy.get(`${checkoutPage.elements.cartItem}-promotion`).contains(promoCode);
-            cy.get(`${checkoutPage.elements.cartItem}-promotion ${checkoutPage.elements.cartItem}-price`)
-                .should('include.text', '-6,00');
-        });
+        // Verify promo code is applied to to the product, which should reduce the price
+        cy.get(`${checkoutPage.elements.offCanvasCart}.is-open`).should('be.visible');
+        cy.get(`${checkoutPage.elements.cartItem}-label`).contains('Test Product');
+        cy.contains(promoCode).should('exist');
+        cy.get('.summary-value.summary-total').should('include.text', '40,00');
+
+        // Set the product number to 2 and verify promotion is not applied to second product
+        cy.get('.cart-item-quantity-container > .custom-select').select('2');
+        cy.contains(promoCode).should('exist');
+        cy.get('.summary-value.summary-total').should('include.text', '100,00');
     });
- });
+});
