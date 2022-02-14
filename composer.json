@@ -5,7 +5,8 @@
     "license": "MIT",
     "minimum-stability": "stable",
     "require": {
-        "php": "^7.4.3 || ^8.0"
+        "php": "^7.4.3 || ^8.0",
+        "shopware/core": "6.4.8.1"
     },
     "scripts": {
         "pre-install-cmd": [
